@@ -1,0 +1,59 @@
+// Total Monthly Waste
+// Shows the waste figure from the most recent audit run only
+Total Monthly Waste =
+CALCULATE(
+    SUM(LicenceAuditResults[EstimatedMonthlyCost]),
+    LicenceAuditResults[AuditDate] = MAX(LicenceAuditResults[AuditDate])
+)
+
+// Total Annual Waste
+// Annualised projection from the latest monthly figure
+Total Annual Waste = [Total Monthly Waste] * 12
+
+// Waste Trend
+// Sum per audit date — use on a line chart with AuditDate on the X axis
+Waste By Audit Date =
+SUM(LicenceAuditResults[EstimatedMonthlyCost])
+
+// Licence Utilisation %
+// Overall utilisation across all SKUs for the inventory summary page
+Utilisation Pct =
+DIVIDE(
+    SUM(LicenceInventorySummary[Assigned]),
+    SUM(LicenceInventorySummary[Purchased]),
+    0
+) * 100
+
+// Wasted Licence Count
+// Number of individual waste records in the latest audit
+Wasted Licence Count =
+CALCULATE(
+    COUNTROWS(LicenceAuditResults),
+    LicenceAuditResults[AuditDate] = MAX(LicenceAuditResults[AuditDate])
+)
+
+// Waste Change vs Previous Audit
+// Shows improvement (or regression) between the two most recent runs
+Waste Change =
+VAR LatestDate = MAX(LicenceAuditResults[AuditDate])
+VAR PreviousDate =
+    CALCULATE(
+        MAX(LicenceAuditResults[AuditDate]),
+        LicenceAuditResults[AuditDate] < LatestDate
+    )
+VAR LatestWaste =
+    CALCULATE(
+        SUM(LicenceAuditResults[EstimatedMonthlyCost]),
+        LicenceAuditResults[AuditDate] = LatestDate
+    )
+VAR PreviousWaste =
+    CALCULATE(
+        SUM(LicenceAuditResults[EstimatedMonthlyCost]),
+        LicenceAuditResults[AuditDate] = PreviousDate
+    )
+RETURN
+    IF(
+        NOT ISBLANK(PreviousWaste),
+        LatestWaste - PreviousWaste,
+        BLANK()
+    )

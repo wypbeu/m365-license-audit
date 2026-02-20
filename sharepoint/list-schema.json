@@ -1,0 +1,50 @@
+{
+  "lists": [
+    {
+      "displayName": "LicenceAuditResults",
+      "description": "Per-user licence waste records from the weekly audit runbook",
+      "columns": [
+        { "name": "AuditDate", "type": "dateTime", "required": true },
+        { "name": "UserPrincipalName", "type": "text", "required": true },
+        { "name": "DisplayName", "type": "text" },
+        { "name": "Department", "type": "text" },
+        { "name": "AccountEnabled", "type": "boolean" },
+        {
+          "name": "UserType",
+          "type": "choice",
+          "choices": ["Member", "Guest"]
+        },
+        { "name": "AssignedSKU", "type": "text" },
+        { "name": "SKUFriendlyName", "type": "text" },
+        {
+          "name": "WasteCategory",
+          "type": "choice",
+          "choices": [
+            "Disabled Account",
+            "Service Account",
+            "Guest",
+            "Inactive User",
+            "Copilot Unused",
+            "E5 Downgrade Candidate"
+          ]
+        },
+        { "name": "LastSignIn", "type": "dateTime" },
+        { "name": "LastWorkloadActivity", "type": "dateTime" },
+        { "name": "EstimatedMonthlyCost", "type": "currency" }
+      ]
+    },
+    {
+      "displayName": "LicenceInventorySummary",
+      "description": "Tenant-wide licence inventory snapshot from the weekly audit runbook",
+      "columns": [
+        { "name": "AuditDate", "type": "dateTime", "required": true },
+        { "name": "SKUPartNumber", "type": "text", "required": true },
+        { "name": "FriendlyName", "type": "text" },
+        { "name": "Purchased", "type": "number" },
+        { "name": "Assigned", "type": "number" },
+        { "name": "Utilisation", "type": "number" },
+        { "name": "EstimatedMonthlySpend", "type": "currency" }
+      ]
+    }
+  ]
+}
