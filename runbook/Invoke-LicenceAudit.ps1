@@ -17,7 +17,7 @@
       - User.Read.All
       - Reports.Read.All
       - Directory.Read.All
-      - Sites.Manage.All
+      - Sites.ReadWrite.All (or Sites.Selected for least privilege)
 
 .NOTES
     Grant permissions to the Managed Identity using:
@@ -28,14 +28,14 @@
 #>
 
 # ============================================================================
-# CONFIGURATION — Update these values for your environment
+# CONFIGURATION - Update these values for your environment
 # ============================================================================
 
 $siteId        = "contoso.sharepoint.com,<site-guid>,<web-guid>"
 $auditListId   = "<LicenceAuditResults-list-guid>"
 $summaryListId = "<LicenceInventorySummary-list-guid>"
 
-# Monthly per-user cost in GBP — update to match your EA/CSP pricing
+# Monthly per-user cost in GBP - update to match your EA/CSP pricing
 $skuMonthlyCost = @{
     "ENTERPRISEPREMIUM"     = 49.20  # Microsoft 365 E5
     "ENTERPRISEPACK"        = 28.40  # Microsoft 365 E3
@@ -98,7 +98,7 @@ foreach ($sku in ($skus | Where-Object { $_.AppliesTo -eq "User" })) {
         "Utilisation"           = $utilisation
         "EstimatedMonthlySpend" = $sku.ConsumedUnits * ($skuMonthlyCost[$sku.SkuPartNumber] ?? 0)
     }
-    New-MgSiteListItem -SiteId $siteId -ListId $summaryListId -Fields $fields
+    New-MgSiteListItem -SiteId $siteId -ListId $summaryListId -BodyParameter @{ fields = $fields }
 }
 
 Write-Output "Inventory summary written to SharePoint."
@@ -192,7 +192,7 @@ foreach ($user in $users) {
                 "LastWorkloadActivity" = $lastActivity
                 "EstimatedMonthlyCost" = $monthlyCost
             }
-            New-MgSiteListItem -SiteId $siteId -ListId $auditListId -Fields $fields
+            New-MgSiteListItem -SiteId $siteId -ListId $auditListId -BodyParameter @{ fields = $fields }
             $wasteCount++
         }
     }

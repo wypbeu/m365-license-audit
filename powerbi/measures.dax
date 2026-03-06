@@ -1,9 +1,12 @@
 // Total Monthly Waste
 // Shows the waste figure from the most recent audit run only
+// Uses ALL() to ignore slicer context when finding the latest date
 Total Monthly Waste =
+VAR LatestAuditDate = CALCULATE(MAX(LicenceAuditResults[AuditDate]), ALL(LicenceAuditResults))
+RETURN
 CALCULATE(
     SUM(LicenceAuditResults[EstimatedMonthlyCost]),
-    LicenceAuditResults[AuditDate] = MAX(LicenceAuditResults[AuditDate])
+    LicenceAuditResults[AuditDate] = LatestAuditDate
 )
 
 // Total Annual Waste
@@ -11,7 +14,7 @@ CALCULATE(
 Total Annual Waste = [Total Monthly Waste] * 12
 
 // Waste Trend
-// Sum per audit date — use on a line chart with AuditDate on the X axis
+// Sum per audit date - use on a line chart with AuditDate on the X axis
 Waste By Audit Date =
 SUM(LicenceAuditResults[EstimatedMonthlyCost])
 
@@ -27,9 +30,11 @@ DIVIDE(
 // Wasted Licence Count
 // Number of individual waste records in the latest audit
 Wasted Licence Count =
+VAR LatestAuditDate = CALCULATE(MAX(LicenceAuditResults[AuditDate]), ALL(LicenceAuditResults))
+RETURN
 CALCULATE(
     COUNTROWS(LicenceAuditResults),
-    LicenceAuditResults[AuditDate] = MAX(LicenceAuditResults[AuditDate])
+    LicenceAuditResults[AuditDate] = LatestAuditDate
 )
 
 // Waste Change vs Previous Audit
