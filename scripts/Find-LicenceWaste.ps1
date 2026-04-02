@@ -81,7 +81,10 @@ $copilotPath = Join-Path $env:TEMP "CopilotUsage_$(Get-Date -Format yyyyMMdd).cs
 try {
     $copilotUri = "https://graph.microsoft.com/beta/reports/getMicrosoft365CopilotUsageUserDetail(period='D180')"
     Invoke-MgGraphRequest -Uri $copilotUri -OutputFilePath $copilotPath
-    $copilotUsage = Import-Csv $copilotPath
+    # Report can return multiple rows per user (one per active day); deduplicate
+    $copilotUsage = Import-Csv $copilotPath |
+        Sort-Object 'User Principal Name', 'Last Activity Date' -Descending |
+        Sort-Object 'User Principal Name' -Unique
     $hasCopilotData = $true
 } catch {
     Write-Warning "Copilot usage report not available (beta endpoint): $_"
