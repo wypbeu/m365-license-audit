@@ -104,9 +104,9 @@ function Test-FreeSku {
 
 # --- Pattern 1: Disabled accounts with paid licences ---
 Write-Host "`nAnalysing waste pattern: Disabled accounts..." -ForegroundColor Yellow
-$disabled = $userLicences | Where-Object {
+$disabled = @($userLicences | Where-Object {
     $_.Enabled -eq "False" -and -not (Test-FreeSku $_.SKU)
-}
+})
 foreach ($record in $disabled) {
     $allWaste.Add([PSCustomObject]@{
         UPN              = $record.UPN
@@ -123,7 +123,7 @@ Write-Host "  Found $($disabled.Count) licence assignments on disabled accounts"
 
 # --- Pattern 2: Service accounts on premium licences ---
 Write-Host "Analysing waste pattern: Service accounts..." -ForegroundColor Yellow
-$serviceAccounts = $userLicences | Where-Object {
+$serviceAccounts = @($userLicences | Where-Object {
     $_.Enabled -eq "True" -and
     $_.SKU -match "ENTERPRISE|SPE_E" -and
     (
@@ -131,7 +131,7 @@ $serviceAccounts = $userLicences | Where-Object {
         $_.LastSignIn -eq "" -or
         ($_.LastSignIn -ne "" -and [datetime]$_.LastSignIn -lt (Get-Date).AddDays(-180))
     )
-}
+})
 foreach ($record in $serviceAccounts) {
     $allWaste.Add([PSCustomObject]@{
         UPN              = $record.UPN
@@ -148,9 +148,9 @@ Write-Host "  Found $($serviceAccounts.Count) potential service accounts on prem
 
 # --- Pattern 3: Guests with paid licences ---
 Write-Host "Analysing waste pattern: Guest users..." -ForegroundColor Yellow
-$guests = $userLicences | Where-Object {
+$guests = @($userLicences | Where-Object {
     $_.UserType -eq "Guest" -and -not (Test-FreeSku $_.SKU)
-}
+})
 foreach ($record in $guests) {
     $allWaste.Add([PSCustomObject]@{
         UPN              = $record.UPN
@@ -207,7 +207,7 @@ Write-Host "  Found $inactiveCount licence assignments on inactive users"
 # --- Pattern 5: Copilot with no activity ---
 if ($hasCopilotData) {
     Write-Host "Analysing waste pattern: Copilot unused..." -ForegroundColor Yellow
-    $copilotLicensed = $userLicences | Where-Object { $_.SKU -match "Copilot" }
+    $copilotLicensed = @($userLicences | Where-Object { $_.SKU -match "Copilot" })
     $copilotActiveUPNs = ($copilotUsage | Where-Object { $_.'Last Activity Date' -ne "" }).'User Principal Name'
 
     foreach ($record in $copilotLicensed) {
