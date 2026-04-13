@@ -120,11 +120,17 @@ try {
 $cutoffDate = (Get-Date).AddDays(-$InactiveDays)
 $allWaste = [System.Collections.Generic.List[PSCustomObject]]::new()
 
-# Helper to check if a SKU is free/zero-cost
+# Helper to check if a SKU is free/zero-cost.
+# Defaults to "paid" (false) when pricing is unknown so the analysis still
+# produces records if sku-pricing.json is missing — otherwise the script
+# silently filters everything out and writes a 0-byte waste CSV.
 function Test-FreeSku {
     param([string]$SkuName)
-    $cost = $skuPricing[$SkuName]
-    return (-not $cost -or $cost -eq 0 -or $SkuName -match "FREE|FLOW_FREE|POWER_BI_STANDARD")
+    if ($SkuName -match "FREE|FLOW_FREE|POWER_BI_STANDARD|_viral|_vTrial|TRIAL") { return $true }
+    if ($skuPricing.ContainsKey($SkuName)) {
+        return ([double]$skuPricing[$SkuName] -eq 0)
+    }
+    return $false  # unknown SKU — treat as paid, include in analysis
 }
 
 # --- Pattern 1: Disabled accounts with paid licences ---
