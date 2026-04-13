@@ -60,11 +60,13 @@ $userLicences = Import-Csv $mapFile
 
 # --- Load pricing ---
 $skuPricingFile = Join-Path $ConfigPath "sku-pricing.json"
+Write-Host "Pricing file: $skuPricingFile" -ForegroundColor DarkGray
 if (Test-Path $skuPricingFile) {
     $skuPricing = Get-Content $skuPricingFile -Raw | ConvertFrom-Json -AsHashtable
-    $skuPricing.Remove("_comment")
+    @($skuPricing.Keys) | Where-Object { $_ -like "_*" } | ForEach-Object { [void]$skuPricing.Remove($_) }
+    Write-Host "Pricing loaded: $($skuPricing.Count) SKU entries" -ForegroundColor DarkGray
 } else {
-    Write-Warning "SKU pricing config not found — cost estimates will be zero"
+    Write-Warning "SKU pricing config not found at $skuPricingFile — cost estimates will be zero"
     $skuPricing = @{}
 }
 
@@ -81,11 +83,34 @@ $copilotPath = Join-Path $env:TEMP "CopilotUsage_$(Get-Date -Format yyyyMMdd).cs
 try {
     $copilotUri = "https://graph.microsoft.com/beta/reports/getMicrosoft365CopilotUsageUserDetail(period='D180')"
     Invoke-MgGraphRequest -Uri $copilotUri -OutputFilePath $copilotPath
+
+    # Microsoft has occasionally emitted duplicate column headers in this report
+    # (Import-Csv then throws "The member X is already present"). Sanitise the
+    # header row before parsing by suffixing repeats with _1, _2, ...
+    $rawLines = Get-Content $copilotPath
+    if ($rawLines.Count -gt 0) {
+        $headerCols = $rawLines[0] -split ','
+        $seen = @{}
+        $clean = foreach ($h in $headerCols) {
+            $key = $h.Trim('"')
+            if ($seen.ContainsKey($key)) {
+                $seen[$key]++
+                "$key`_$($seen[$key])"
+            } else {
+                $seen[$key] = 0
+                $key
+            }
+        }
+        $rawLines[0] = ($clean | ForEach-Object { '"' + $_ + '"' }) -join ','
+        $rawLines | Set-Content -Path $copilotPath -Encoding UTF8
+    }
+
     # Report can return multiple rows per user (one per active day); deduplicate
-    $copilotUsage = Import-Csv $copilotPath |
+    $copilotUsage = @(Import-Csv $copilotPath |
         Sort-Object 'User Principal Name', 'Last Activity Date' -Descending |
-        Sort-Object 'User Principal Name' -Unique
+        Sort-Object 'User Principal Name' -Unique)
     $hasCopilotData = $true
+    Write-Host "  Copilot usage rows: $($copilotUsage.Count)" -ForegroundColor DarkGray
 } catch {
     Write-Warning "Copilot usage report not available (beta endpoint): $_"
     $copilotUsage = @()
@@ -104,128 +129,167 @@ function Test-FreeSku {
 
 # --- Pattern 1: Disabled accounts with paid licences ---
 Write-Host "`nAnalysing waste pattern: Disabled accounts..." -ForegroundColor Yellow
-$disabled = @($userLicences | Where-Object {
-    $_.Enabled -eq "False" -and -not (Test-FreeSku $_.SKU)
-})
-foreach ($record in $disabled) {
-    $allWaste.Add([PSCustomObject]@{
-        UPN              = $record.UPN
-        DisplayName      = $record.DisplayName
-        Department       = $record.Department
-        SKU              = $record.SKU
-        FriendlyName     = $record.FriendlyName
-        WasteCategory    = "Disabled Account"
-        LastSignIn       = $record.LastSignIn
-        MonthlyCost      = $skuPricing[$record.SKU] ?? 0
+try {
+    $disabled = @($userLicences | Where-Object {
+        $_.Enabled -eq "False" -and -not (Test-FreeSku $_.SKU)
     })
-}
-Write-Host "  Found $($disabled.Count) licence assignments on disabled accounts"
-
-# --- Pattern 2: Service accounts on premium licences ---
-Write-Host "Analysing waste pattern: Service accounts..." -ForegroundColor Yellow
-$serviceAccounts = @($userLicences | Where-Object {
-    $_.Enabled -eq "True" -and
-    $_.SKU -match "ENTERPRISE|SPE_E" -and
-    (
-        $_.UPN -match $ServiceAccountPattern -or
-        $_.LastSignIn -eq "" -or
-        ($_.LastSignIn -ne "" -and [datetime]$_.LastSignIn -lt (Get-Date).AddDays(-180))
-    )
-})
-foreach ($record in $serviceAccounts) {
-    $allWaste.Add([PSCustomObject]@{
-        UPN              = $record.UPN
-        DisplayName      = $record.DisplayName
-        Department       = $record.Department
-        SKU              = $record.SKU
-        FriendlyName     = $record.FriendlyName
-        WasteCategory    = "Service Account"
-        LastSignIn       = $record.LastSignIn
-        MonthlyCost      = $skuPricing[$record.SKU] ?? 0
-    })
-}
-Write-Host "  Found $($serviceAccounts.Count) potential service accounts on premium licences"
-
-# --- Pattern 3: Guests with paid licences ---
-Write-Host "Analysing waste pattern: Guest users..." -ForegroundColor Yellow
-$guests = @($userLicences | Where-Object {
-    $_.UserType -eq "Guest" -and -not (Test-FreeSku $_.SKU)
-})
-foreach ($record in $guests) {
-    $allWaste.Add([PSCustomObject]@{
-        UPN              = $record.UPN
-        DisplayName      = $record.DisplayName
-        Department       = $record.Department
-        SKU              = $record.SKU
-        FriendlyName     = $record.FriendlyName
-        WasteCategory    = "Guest"
-        LastSignIn       = $record.LastSignIn
-        MonthlyCost      = $skuPricing[$record.SKU] ?? 0
-    })
-}
-Write-Host "  Found $($guests.Count) guest users with paid licences"
-
-# --- Pattern 4: Inactive users ---
-Write-Host "Analysing waste pattern: Inactive users ($InactiveDays+ days)..." -ForegroundColor Yellow
-$activeUsers = $userLicences | Where-Object {
-    $_.Enabled -eq "True" -and
-    $_.UserType -ne "Guest" -and
-    -not ($_.UPN -match $ServiceAccountPattern) -and
-    -not (Test-FreeSku $_.SKU)
-}
-
-foreach ($record in $activeUsers) {
-    $activity = $usage | Where-Object { $_.'User Principal Name' -eq $record.UPN }
-    if (-not $activity) { continue }
-
-    $lastActivity = @(
-        $activity.'Exchange Last Activity Date'
-        $activity.'Teams Last Activity Date'
-        $activity.'SharePoint Last Activity Date'
-        $activity.'OneDrive Last Activity Date'
-    ) | Where-Object { $_ -ne "" } |
-        ForEach-Object { [datetime]$_ } |
-        Sort-Object -Descending |
-        Select-Object -First 1
-
-    if (-not $lastActivity -or $lastActivity -lt $cutoffDate) {
+    foreach ($record in $disabled) {
         $allWaste.Add([PSCustomObject]@{
             UPN              = $record.UPN
             DisplayName      = $record.DisplayName
             Department       = $record.Department
             SKU              = $record.SKU
             FriendlyName     = $record.FriendlyName
-            WasteCategory    = "Inactive User"
+            WasteCategory    = "Disabled Account"
             LastSignIn       = $record.LastSignIn
             MonthlyCost      = $skuPricing[$record.SKU] ?? 0
         })
     }
+    Write-Host "  Found $($disabled.Count) licence assignments on disabled accounts"
+} catch {
+    Write-Warning "Pattern 1 (Disabled) failed: $($_.Exception.Message)"
+    Write-Warning "  at $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line.Trim())"
 }
-$inactiveCount = ($allWaste | Where-Object { $_.WasteCategory -eq "Inactive User" } | Measure-Object).Count
-Write-Host "  Found $inactiveCount licence assignments on inactive users"
 
-# --- Pattern 5: Copilot with no activity ---
-if ($hasCopilotData) {
-    Write-Host "Analysing waste pattern: Copilot unused..." -ForegroundColor Yellow
-    $copilotLicensed = @($userLicences | Where-Object { $_.SKU -match "Copilot" })
-    $copilotActiveUPNs = ($copilotUsage | Where-Object { $_.'Last Activity Date' -ne "" }).'User Principal Name'
+# --- Pattern 2: Service accounts on premium licences ---
+Write-Host "Analysing waste pattern: Service accounts..." -ForegroundColor Yellow
+try {
+    $serviceAccounts = @($userLicences | Where-Object {
+        $_.Enabled -eq "True" -and
+        $_.SKU -match "ENTERPRISE|SPE_E" -and
+        (
+            $_.UPN -match $ServiceAccountPattern -or
+            [string]::IsNullOrWhiteSpace($_.LastSignIn) -or
+            (-not [string]::IsNullOrWhiteSpace($_.LastSignIn) -and [datetime]$_.LastSignIn -lt (Get-Date).AddDays(-180))
+        )
+    })
+    foreach ($record in $serviceAccounts) {
+        $allWaste.Add([PSCustomObject]@{
+            UPN              = $record.UPN
+            DisplayName      = $record.DisplayName
+            Department       = $record.Department
+            SKU              = $record.SKU
+            FriendlyName     = $record.FriendlyName
+            WasteCategory    = "Service Account"
+            LastSignIn       = $record.LastSignIn
+            MonthlyCost      = $skuPricing[$record.SKU] ?? 0
+        })
+    }
+    Write-Host "  Found $($serviceAccounts.Count) potential service accounts on premium licences"
+} catch {
+    Write-Warning "Pattern 2 (Service accounts) failed: $($_.Exception.Message)"
+    Write-Warning "  at $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line.Trim())"
+}
 
-    foreach ($record in $copilotLicensed) {
-        if ($record.UPN -notin $copilotActiveUPNs) {
+# --- Pattern 3: Guests with paid licences ---
+Write-Host "Analysing waste pattern: Guest users..." -ForegroundColor Yellow
+try {
+    $guests = @($userLicences | Where-Object {
+        $_.UserType -eq "Guest" -and -not (Test-FreeSku $_.SKU)
+    })
+    foreach ($record in $guests) {
+        $allWaste.Add([PSCustomObject]@{
+            UPN              = $record.UPN
+            DisplayName      = $record.DisplayName
+            Department       = $record.Department
+            SKU              = $record.SKU
+            FriendlyName     = $record.FriendlyName
+            WasteCategory    = "Guest"
+            LastSignIn       = $record.LastSignIn
+            MonthlyCost      = $skuPricing[$record.SKU] ?? 0
+        })
+    }
+    Write-Host "  Found $($guests.Count) guest users with paid licences"
+} catch {
+    Write-Warning "Pattern 3 (Guests) failed: $($_.Exception.Message)"
+    Write-Warning "  at $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line.Trim())"
+}
+
+# --- Pattern 4: Inactive users ---
+Write-Host "Analysing waste pattern: Inactive users ($InactiveDays+ days)..." -ForegroundColor Yellow
+try {
+    $activeUsers = @($userLicences | Where-Object {
+        $_.Enabled -eq "True" -and
+        $_.UserType -ne "Guest" -and
+        -not ($_.UPN -match $ServiceAccountPattern) -and
+        -not (Test-FreeSku $_.SKU)
+    })
+
+    # Index usage by UPN once to avoid O(n*m) scans on large tenants
+    $usageByUpn = @{}
+    foreach ($row in $usage) {
+        $k = $row.'User Principal Name'
+        if (-not [string]::IsNullOrWhiteSpace($k)) { $usageByUpn[$k] = $row }
+    }
+
+    foreach ($record in $activeUsers) {
+        if (-not $usageByUpn.ContainsKey($record.UPN)) { continue }
+        $activity = $usageByUpn[$record.UPN]
+
+        $dateStrings = @(
+            $activity.'Exchange Last Activity Date'
+            $activity.'Teams Last Activity Date'
+            $activity.'SharePoint Last Activity Date'
+            $activity.'OneDrive Last Activity Date'
+        ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+        $lastActivity = $null
+        foreach ($s in $dateStrings) {
+            try {
+                $d = [datetime]$s
+                if ($null -eq $lastActivity -or $d -gt $lastActivity) { $lastActivity = $d }
+            } catch {}
+        }
+
+        if ($null -eq $lastActivity -or $lastActivity -lt $cutoffDate) {
             $allWaste.Add([PSCustomObject]@{
                 UPN              = $record.UPN
                 DisplayName      = $record.DisplayName
                 Department       = $record.Department
                 SKU              = $record.SKU
                 FriendlyName     = $record.FriendlyName
-                WasteCategory    = "Copilot Unused"
+                WasteCategory    = "Inactive User"
                 LastSignIn       = $record.LastSignIn
                 MonthlyCost      = $skuPricing[$record.SKU] ?? 0
             })
         }
     }
-    $copilotWaste = ($allWaste | Where-Object { $_.WasteCategory -eq "Copilot Unused" } | Measure-Object).Count
-    Write-Host "  Found $copilotWaste Copilot licences with no activity"
+    $inactiveCount = @($allWaste | Where-Object { $_.WasteCategory -eq "Inactive User" }).Count
+    Write-Host "  Found $inactiveCount licence assignments on inactive users"
+} catch {
+    Write-Warning "Pattern 4 (Inactive) failed: $($_.Exception.Message)"
+    Write-Warning "  at $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line.Trim())"
+}
+
+# --- Pattern 5: Copilot with no activity ---
+if ($hasCopilotData) {
+    Write-Host "Analysing waste pattern: Copilot unused..." -ForegroundColor Yellow
+    try {
+        $copilotLicensed = @($userLicences | Where-Object { $_.SKU -match "Copilot" })
+        $copilotActiveUPNs = @($copilotUsage | Where-Object {
+            -not [string]::IsNullOrWhiteSpace($_.'Last Activity Date')
+        } | ForEach-Object { $_.'User Principal Name' })
+
+        foreach ($record in $copilotLicensed) {
+            if ($record.UPN -notin $copilotActiveUPNs) {
+                $allWaste.Add([PSCustomObject]@{
+                    UPN              = $record.UPN
+                    DisplayName      = $record.DisplayName
+                    Department       = $record.Department
+                    SKU              = $record.SKU
+                    FriendlyName     = $record.FriendlyName
+                    WasteCategory    = "Copilot Unused"
+                    LastSignIn       = $record.LastSignIn
+                    MonthlyCost      = $skuPricing[$record.SKU] ?? 0
+                })
+            }
+        }
+        $copilotWaste = @($allWaste | Where-Object { $_.WasteCategory -eq "Copilot Unused" }).Count
+        Write-Host "  Found $copilotWaste Copilot licences with no activity"
+    } catch {
+        Write-Warning "Pattern 5 (Copilot) failed: $($_.Exception.Message)"
+        Write-Warning "  at $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line.Trim())"
+    }
 }
 
 # --- Output ---

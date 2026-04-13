@@ -1,0 +1,16 @@
+# Client / tenant data — never commit
+docs/*.csv
+docs/*.json
+docs/*.html
+docs/*.xlsx
+docs/*.pdf
+output/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Editor / tooling
+.vscode/
+.idea/
+*.swp
