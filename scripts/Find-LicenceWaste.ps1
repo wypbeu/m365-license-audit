@@ -50,6 +50,34 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# Safe date parser — handles UK DD/MM/YYYY, ISO, and a few variants.
+# Returns $null if the string is blank or unparseable (never throws).
+function ConvertTo-SafeDate {
+    param([object]$Value)
+    if ($null -eq $Value) { return $null }
+    $s = [string]$Value
+    if ([string]::IsNullOrWhiteSpace($s)) { return $null }
+    $s = $s.Trim()
+    $formats = @(
+        "dd/MM/yyyy HH:mm:ss",
+        "dd/MM/yyyy HH:mm",
+        "dd/MM/yyyy",
+        "yyyy-MM-ddTHH:mm:ssZ",
+        "yyyy-MM-ddTHH:mm:ss.fffZ",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd"
+    )
+    $culture = [System.Globalization.CultureInfo]::InvariantCulture
+    foreach ($fmt in $formats) {
+        try {
+            return [datetime]::ParseExact($s, $fmt, $culture)
+        } catch {}
+    }
+    # Fallback to culture-aware parse
+    try { return [datetime]::Parse($s, [System.Globalization.CultureInfo]::GetCultureInfo("en-GB")) } catch {}
+    return $null
+}
+
 # --- Load user-licence map ---
 $mapFile = Join-Path $OutputPath "user-licence-map.csv"
 if (-not (Test-Path $mapFile)) {
@@ -87,8 +115,8 @@ try {
     # Microsoft has occasionally emitted duplicate column headers in this report
     # (Import-Csv then throws "The member X is already present"). Sanitise the
     # header row before parsing by suffixing repeats with _1, _2, ...
-    $rawLines = Get-Content $copilotPath
-    if ($rawLines.Count -gt 0) {
+    $rawLines = @(Get-Content $copilotPath)
+    if ($rawLines.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($rawLines[0])) {
         $headerCols = $rawLines[0] -split ','
         $seen = @{}
         $clean = foreach ($h in $headerCols) {
@@ -160,14 +188,14 @@ try {
 # --- Pattern 2: Service accounts on premium licences ---
 Write-Host "Analysing waste pattern: Service accounts..." -ForegroundColor Yellow
 try {
+    $svcCutoff = (Get-Date).AddDays(-180)
     $serviceAccounts = @($userLicences | Where-Object {
-        $_.Enabled -eq "True" -and
-        $_.SKU -match "ENTERPRISE|SPE_E" -and
-        (
-            $_.UPN -match $ServiceAccountPattern -or
-            [string]::IsNullOrWhiteSpace($_.LastSignIn) -or
-            (-not [string]::IsNullOrWhiteSpace($_.LastSignIn) -and [datetime]$_.LastSignIn -lt (Get-Date).AddDays(-180))
-        )
+        if ($_.Enabled -ne "True") { return $false }
+        if ($_.SKU -notmatch "ENTERPRISE|SPE_E") { return $false }
+        if ($_.UPN -match $ServiceAccountPattern) { return $true }
+        $d = ConvertTo-SafeDate $_.LastSignIn
+        if ($null -eq $d) { return $true }   # never signed in
+        return ($d -lt $svcCutoff)
     })
     foreach ($record in $serviceAccounts) {
         $allWaste.Add([PSCustomObject]@{
@@ -241,10 +269,10 @@ try {
 
         $lastActivity = $null
         foreach ($s in $dateStrings) {
-            try {
-                $d = [datetime]$s
-                if ($null -eq $lastActivity -or $d -gt $lastActivity) { $lastActivity = $d }
-            } catch {}
+            $d = ConvertTo-SafeDate $s
+            if ($null -ne $d -and ($null -eq $lastActivity -or $d -gt $lastActivity)) {
+                $lastActivity = $d
+            }
         }
 
         if ($null -eq $lastActivity -or $lastActivity -lt $cutoffDate) {
