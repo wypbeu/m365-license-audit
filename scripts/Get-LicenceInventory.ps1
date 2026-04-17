@@ -66,7 +66,7 @@ $licenceSummary = $skus |
     Select-Object @{
         Name = "SKUPartNumber"; Expression = { $_.SkuPartNumber }
     }, @{
-        Name = "FriendlyName"; Expression = { $skuNames[$_.SkuPartNumber] ?? $_.SkuPartNumber }
+        Name = "FriendlyName"; Expression = { if ($null -ne $skuNames[$_.SkuPartNumber]) { $skuNames[$_.SkuPartNumber] } else { $_.SkuPartNumber } }
     }, @{
         Name = "Purchased"; Expression = { $_.PrepaidUnits.Enabled }
     }, @{

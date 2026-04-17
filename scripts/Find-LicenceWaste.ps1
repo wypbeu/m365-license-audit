@@ -176,7 +176,7 @@ try {
             FriendlyName     = $record.FriendlyName
             WasteCategory    = "Disabled Account"
             LastSignIn       = $record.LastSignIn
-            MonthlyCost      = $skuPricing[$record.SKU] ?? 0
+            MonthlyCost      = if ($null -ne $skuPricing[$record.SKU]) { $skuPricing[$record.SKU] } else { 0 }
         })
     }
     Write-Host "  Found $($disabled.Count) licence assignments on disabled accounts"
@@ -206,7 +206,7 @@ try {
             FriendlyName     = $record.FriendlyName
             WasteCategory    = "Service Account"
             LastSignIn       = $record.LastSignIn
-            MonthlyCost      = $skuPricing[$record.SKU] ?? 0
+            MonthlyCost      = if ($null -ne $skuPricing[$record.SKU]) { $skuPricing[$record.SKU] } else { 0 }
         })
     }
     Write-Host "  Found $($serviceAccounts.Count) potential service accounts on premium licences"
@@ -230,7 +230,7 @@ try {
             FriendlyName     = $record.FriendlyName
             WasteCategory    = "Guest"
             LastSignIn       = $record.LastSignIn
-            MonthlyCost      = $skuPricing[$record.SKU] ?? 0
+            MonthlyCost      = if ($null -ne $skuPricing[$record.SKU]) { $skuPricing[$record.SKU] } else { 0 }
         })
     }
     Write-Host "  Found $($guests.Count) guest users with paid licences"
@@ -284,7 +284,7 @@ try {
                 FriendlyName     = $record.FriendlyName
                 WasteCategory    = "Inactive User"
                 LastSignIn       = $record.LastSignIn
-                MonthlyCost      = $skuPricing[$record.SKU] ?? 0
+                MonthlyCost      = if ($null -ne $skuPricing[$record.SKU]) { $skuPricing[$record.SKU] } else { 0 }
             })
         }
     }
@@ -314,7 +314,7 @@ if ($hasCopilotData) {
                     FriendlyName     = $record.FriendlyName
                     WasteCategory    = "Copilot Unused"
                     LastSignIn       = $record.LastSignIn
-                    MonthlyCost      = $skuPricing[$record.SKU] ?? 0
+                    MonthlyCost      = if ($null -ne $skuPricing[$record.SKU]) { $skuPricing[$record.SKU] } else { 0 }
                 })
             }
         }

@@ -82,7 +82,7 @@ foreach ($user in $users) {
             Department    = $user.Department
             JobTitle      = $user.JobTitle
             SKU           = $skuName
-            FriendlyName  = $skuNames[$skuName] ?? $skuName
+            FriendlyName  = if ($null -ne $skuNames[$skuName]) { $skuNames[$skuName] } else { $skuName }
             DisabledPlans = ($licence.DisabledPlans | Measure-Object).Count
             LastSignIn    = $user.SignInActivity.LastSignInDateTime
         })
