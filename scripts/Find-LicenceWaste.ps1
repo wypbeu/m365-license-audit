@@ -100,14 +100,14 @@ if (Test-Path $skuPricingFile) {
 
 # --- Pull usage report ---
 Write-Host "Pulling M365 usage report (180-day period)..." -ForegroundColor Cyan
-$usagePath = Join-Path $env:TEMP "M365Usage_$(Get-Date -Format yyyyMMdd).csv"
+$usagePath = Join-Path ([System.IO.Path]::GetTempPath()) "M365Usage_$(Get-Date -Format yyyyMMdd).csv"
 $uri = "https://graph.microsoft.com/v1.0/reports/getOffice365ActiveUserDetail(period='D180')"
 Invoke-MgGraphRequest -Uri $uri -OutputFilePath $usagePath
 $usage = Import-Csv $usagePath
 
 # --- Pull Copilot usage (beta) ---
 Write-Host "Pulling Copilot usage report..." -ForegroundColor Cyan
-$copilotPath = Join-Path $env:TEMP "CopilotUsage_$(Get-Date -Format yyyyMMdd).csv"
+$copilotPath = Join-Path ([System.IO.Path]::GetTempPath()) "CopilotUsage_$(Get-Date -Format yyyyMMdd).csv"
 try {
     $copilotUri = "https://graph.microsoft.com/beta/reports/getMicrosoft365CopilotUsageUserDetail(period='D180')"
     Invoke-MgGraphRequest -Uri $copilotUri -OutputFilePath $copilotPath
