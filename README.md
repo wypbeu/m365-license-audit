@@ -48,7 +48,7 @@ Connect-MgGraph -Scopes "Organization.Read.All","User.Read.All","Reports.Read.Al
 
 Results are written to `./output/` as CSV files.
 
-To reclaim licences from disabled accounts, connect with `Directory.ReadWrite.All` in addition to the scopes above, then run `./scripts/Remove-DisabledUserLicences.ps1 -WhatIf` first to see what would be removed, and without `-WhatIf` to remove it.
+To reclaim licences from disabled accounts, connect with `LicenseAssignment.ReadWrite.All` in addition to the scopes above, then run `./scripts/Remove-DisabledUserLicences.ps1 -WhatIf` first to see what would be removed, and without `-WhatIf` to remove it.
 
 ## Repository Structure
 
