@@ -11,12 +11,13 @@
 
     Schedule: Weekly (recommended Sunday 02:00 UTC)
     Identity: System-Assigned Managed Identity on the Automation Account
+    Runtime: PowerShell 7.4 or later (Azure Automation retires 7.1 and 7.2 support
+    on 30 September 2026)
 
     Required Graph application permissions on the Managed Identity:
       - Organization.Read.All
       - User.Read.All
       - Reports.Read.All
-      - Directory.Read.All
       - Sites.ReadWrite.All (or Sites.Selected for least privilege)
 
 .NOTES
@@ -37,8 +38,8 @@ $summaryListId = "<LicenceInventorySummary-list-guid>"
 
 # Monthly per-user cost in GBP - update to match your EA/CSP pricing
 $skuMonthlyCost = @{
-    "ENTERPRISEPREMIUM"     = 49.20  # Microsoft 365 E5
-    "ENTERPRISEPACK"        = 28.40  # Microsoft 365 E3
+    "ENTERPRISEPREMIUM"     = 49.20  # Office 365 E5
+    "ENTERPRISEPACK"        = 28.40  # Office 365 E3
     "SPE_E5"                = 49.20  # Microsoft 365 E5 (unified)
     "SPE_E3"                = 28.40  # Microsoft 365 E3 (unified)
     "SPE_F1"                = 7.50   # Microsoft 365 F3
@@ -51,8 +52,8 @@ $skuMonthlyCost = @{
 }
 
 $skuFriendlyNames = @{
-    "ENTERPRISEPREMIUM"     = "Microsoft 365 E5"
-    "ENTERPRISEPACK"        = "Microsoft 365 E3"
+    "ENTERPRISEPREMIUM"     = "Office 365 E5"
+    "ENTERPRISEPACK"        = "Office 365 E3"
     "SPE_E5"                = "Microsoft 365 E5 (unified)"
     "SPE_E3"                = "Microsoft 365 E3 (unified)"
     "SPE_F1"                = "Microsoft 365 F3"

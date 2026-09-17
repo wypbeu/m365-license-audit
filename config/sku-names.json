@@ -1,6 +1,6 @@
 {
-  "ENTERPRISEPREMIUM": "Microsoft 365 E5",
-  "ENTERPRISEPACK": "Microsoft 365 E3",
+  "ENTERPRISEPREMIUM": "Office 365 E5",
+  "ENTERPRISEPACK": "Office 365 E3",
   "SPE_E5": "Microsoft 365 E5 (unified)",
   "SPE_E3": "Microsoft 365 E3 (unified)",
   "SPE_F1": "Microsoft 365 F3",
@@ -9,7 +9,8 @@
   "Microsoft_365_Copilot": "Microsoft 365 Copilot",
   "TEAMS_PREMIUM": "Teams Premium",
   "FLOW_FREE": "Power Automate Free",
-  "POWER_BI_STANDARD": "Power BI Free",
+  "SMB_BUSINESS_PREMIUM": "Microsoft 365 Business Standard - Prepaid Legacy",
+  "POWER_BI_STANDARD": "Microsoft Fabric (Free)",
   "POWER_BI_PRO": "Power BI Pro",
   "INTUNE_A": "Microsoft Intune Plan 1",
   "INTUNE_P1": "Microsoft Intune Plan 1 (standalone)",

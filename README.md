@@ -15,6 +15,8 @@ Connects to your M365 tenant via Graph API and identifies:
 
 Outputs a waste report with estimated annual cost, and optionally writes results to SharePoint for a self-refreshing Power BI dashboard.
 
+The Copilot Unused category is written by `scripts/Find-LicenceWaste.ps1` and `runbook/Invoke-LicenceAudit.ps1`; it is an extra category beyond the waste patterns the blog post's own code samples describe.
+
 ## Prerequisites
 
 - PowerShell 7+
@@ -23,8 +25,7 @@ Outputs a waste report with estimated annual cost, and optionally writes results
   - `Organization.Read.All`
   - `User.Read.All`
   - `Reports.Read.All`
-  - `Directory.Read.All`
-  - `Sites.Manage.All` (only if writing to SharePoint)
+  - `Sites.ReadWrite.All` (only if writing to SharePoint; `Sites.Selected` with explicit site-level permissions is the least-privilege alternative)
 
 > **Report privacy:** A Global Admin must disable user-level report obfuscation in **M365 Admin Centre > Settings > Org Settings > Reports** for the usage cross-reference to work. Without this, usage reports return hashed identifiers.
 
@@ -36,7 +37,7 @@ git clone https://github.com/wypbeu/m365-license-audit.git
 cd m365-license-audit
 
 # Connect to Graph (interactive — for one-off audits)
-Connect-MgGraph -Scopes "Organization.Read.All","User.Read.All","Reports.Read.All","Directory.Read.All"
+Connect-MgGraph -Scopes "Organization.Read.All","User.Read.All","Reports.Read.All"
 
 # Run the scripts in order
 ./scripts/Get-LicenceInventory.ps1 -OutputPath ./output
@@ -47,14 +48,17 @@ Connect-MgGraph -Scopes "Organization.Read.All","User.Read.All","Reports.Read.Al
 
 Results are written to `./output/` as CSV files.
 
+To reclaim licences from disabled accounts, connect with `Directory.ReadWrite.All` in addition to the scopes above, then run `./scripts/Remove-DisabledUserLicences.ps1 -WhatIf` first to see what would be removed, and without `-WhatIf` to remove it.
+
 ## Repository Structure
 
 ```
 ├── scripts/
-│   ├── Get-LicenceInventory.ps1     # Step 1: Pull subscribed SKUs
-│   ├── Get-UserLicenceMap.ps1       # Step 2: Map per-user licence assignments
-│   ├── Find-LicenceWaste.ps1        # Step 3: Identify waste patterns
-│   └── New-WasteReport.ps1          # Step 4: Produce the consolidated waste report
+│   ├── Get-LicenceInventory.ps1        # Step 1: Pull subscribed SKUs
+│   ├── Get-UserLicenceMap.ps1          # Step 2: Map per-user licence assignments
+│   ├── Find-LicenceWaste.ps1           # Step 3: Identify waste patterns
+│   ├── New-WasteReport.ps1             # Step 4: Produce the consolidated waste report
+│   └── Remove-DisabledUserLicences.ps1 # Reclaims licences from disabled accounts, supports -WhatIf
 ├── runbook/
 │   └── Invoke-LicenceAudit.ps1      # Azure Automation runbook (all-in-one)
 ├── config/
